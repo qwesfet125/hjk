@@ -1,0 +1,181 @@
+import sys
+import pygame
+import random
+
+pygame.init()
+
+# 设置
+WIDTH, HEIGHT = 300, 600
+SIZE = 30
+WHITE, BLACK, RED, GREEN, BLUE, CYAN, MAGENTA, YELLOW, ORANGE = (255, 255, 255), (0, 0, 0), (255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255), (255, 0, 255), (255, 255, 0), (255, 165, 0)
+COLORS = [RED, GREEN, BLUE, CYAN, MAGENTA, YELLOW, ORANGE]
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("俄罗斯方块")
+
+# 方块形状
+SHAPES = [
+    [[1, 1, 1],
+     [0, 1, 0]],
+    
+    [[0, 2, 2],
+     [2, 2, 0]],
+    
+    [[3, 3, 0],
+     [0, 3, 3]],
+    
+    [[4, 0, 0],
+     [4, 4, 4]],
+    
+    [[0, 0, 5],
+     [5, 5, 5]],
+    
+    [[6, 6, 6, 6]],
+    
+    [[7, 7],
+     [7, 7]]
+]
+
+# 初始化
+def new_board():
+    board = [[0 for _ in range(10)] for _ in range(20)]
+    board += [[1 for _ in range(10)]]
+    return board
+
+board = new_board()
+current_piece = None
+next_piece = None
+score = 0
+game_over = False
+
+# 功能
+def new_piece():
+    global current_piece, next_piece
+    if next_piece == None:
+        next_piece = [random.choice(SHAPES), 4, 0]
+    current_piece = next_piece
+    next_piece = [random.choice(SHAPES), 4, 0]
+    if collision(current_piece, (0, 0)):
+        game_over()
+
+def collision(piece, offset):
+    off_x, off_y = offset
+    for y, row in enumerate(piece[0]):
+        for x, cell in enumerate(row):
+            try:
+                if cell and board[y + off_y][x + off_x]:
+                    return True
+            except IndexError:
+                return True
+    return False
+
+def join_matrixes(mat1, mat2, mat2_off):
+    off_x, off_y = mat2_off
+    for y, row in enumerate(mat2):
+        for x, val in enumerate(row):
+            if val:
+                mat1[y + off_y][x + off_x] = val
+    return mat1
+
+def rotate(piece):
+    return [ [ piece[y][x]
+            for y in range(len(piece)) ]
+            for x in range(len(piece[0]) - 1, -1, -1) ]
+
+def clear_lines():
+    global board, score
+    lines_to_clear = [i for i, row in enumerate(board[:-1]) if all(row)]
+    if lines_to_clear:
+        for i in lines_to_clear:
+            del board[i]
+            board = [[0 for _ in range(10)]] + board
+        score += 100 * len(lines_to_clear)
+    return len(lines_to_clear)
+
+def drop():
+    global score
+    if not game_over and not collision(current_piece, (0, 1)):
+        current_piece[2] += 1
+    else:
+        join_matrixes(board, current_piece[0], (current_piece[1], current_piece[2]))
+        clear_lines()
+        new_piece()
+        if collision(current_piece, (0, 0)):
+            game_over()
+        score += 10
+
+def move(dx):
+    if not game_over and not collision(current_piece, (dx, 0)):
+        current_piece[1] += dx
+
+def rotate_piece():
+    if not game_over:
+        new_piece = current_piece[0][:]
+        new_piece = rotate(new_piece)
+        if not collision((new_piece, current_piece[1], current_piece[2]), (0, 0)):
+            current_piece[0] = new_piece
+
+def game_over():
+    global game_over
+    game_over = True
+
+def draw_matrix(matrix, offset):
+    off_x, off_y = offset
+    for y, row in enumerate(matrix):
+        for x, val in enumerate(row):
+            if val:
+                pygame.draw.rect(
+                    screen,
+                    COLORS[val],
+                    pygame.Rect(
+                        (off_x+x) * SIZE,
+                        (off_y+y) * SIZE,
+                        SIZE,
+                        SIZE), 0)
+                pygame.draw.rect(
+                    screen,
+                    WHITE,
+                    pygame.Rect(
+                        (off_x+x) * SIZE,
+                        (off_y+y) * SIZE,
+                        SIZE,
+                        SIZE), 1)
+
+# 主循环
+clock = pygame.time.Clock()
+fall_time = 0
+fall_speed = 500
+while True:
+    if game_over:
+        screen.fill(BLACK)
+        font = pygame.font.Font(None, 72)
+        text = font.render("Game Over", True, (255, 0, 0))
+        text_x = WIDTH // 2 - text.get_width() // 2
+        text_y = HEIGHT // 2 - text.get_height() // 2
+        screen.blit(text, (text_x, text_y))
+    else:
+        screen.fill(BLACK)
+        if current_piece == None:
+            new_piece()
+        fall_time += clock.get_rawtime()
+        if fall_time > fall_speed:
+            fall_time = 0
+            drop()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    rotate_piece()
+                if event.key == pygame.K_DOWN:
+                    drop()
+                if event.key == pygame.K_LEFT:
+                    move(-1)
+                if event.key == pygame.K_RIGHT:
+                    move(1)
+                if event.key == pygame.K_p:
+                    pygame.time.wait(5000)
+        draw_matrix(board, (0,0))
+        draw_matrix(current_piece[0], (current_piece[1], current_piece[2]))
+    pygame.display.flip()
+    clock.tick(60)
